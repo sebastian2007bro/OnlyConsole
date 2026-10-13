@@ -71,6 +71,8 @@
     <Import Include="System.Threading.Tasks" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="ICommandPlugin_Helper.vb" />
+    <Compile Include="CommandManager.vb" />
     <Compile Include="MainClassPluginMode.vb" />
     <Compile Include="Form1.Designer.vb">
       <DependentUpon>Form1.vb</DependentUpon>
@@ -119,6 +121,15 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="Resources\Spotify_icon-icons.com_66783.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Resources\405007_terminal_v29b5395ed7.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\ICommandHelper\ICommandHelper.vbproj">
+      <Project>{262a691c-3b3c-48ab-8739-997df86f62c4}</Project>
+      <Name>ICommandHelper</Name>
+    </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.VisualBasic.targets" />
   <PropertyGroup>

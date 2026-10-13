@@ -7,6 +7,7 @@ Public Class Form1
     Private SetupStep As Int64 = 0
 
     Private UserMode As String = "Safe"
+    Private UseCustomConsoleCommands As Boolean = False
 
     Private SafeUser As TouchTest.UserManager
     Private UnSafeUser As TouchTest.UserManager
@@ -30,8 +31,14 @@ Public Class Form1
                     MainClassPluginMode.UI.ShowError("""UsersMultiUsersConfigs.setting"" doesn't exist.")
                     Return
                 End If
-            End If
 
+                If UseCustomConsoleCommands = True Then
+                    WriteLine("CustomConsole>")
+                Else
+                    WriteLine("Console>")
+                End If
+
+            End If
         ElseIf RunMode = RunningMode.CustomController Then
         End If
     End Sub
@@ -41,6 +48,8 @@ Public Class Form1
         Plugin = 2
         CustomController = 3
     End Enum
+
+    Public CommandController As New ICommandPlugin_Helper
 
     Public Sub RunCommand(Command As String, Form As Form, Optional User As TouchTest.UserManager = Nothing)
         Dim UseCustomUser As Boolean = False
@@ -52,6 +61,7 @@ Public Class Form1
         If Command.StartsWith("exit") = True Then
             If Form IsNot Nothing Then
                 Try
+                    MainClassPluginMode.Form1.HideTaskbar(False, False)
                     Form.Close()
                 Catch ex As Exception
                     If IsInAppMode = True Then
@@ -60,6 +70,19 @@ Public Class Form1
                     End If
                 End Try
             End If
+        ElseIf Command.StartsWith("Test1") = True Then
+            Dim pluginPath As String = My.Application.Info.DirectoryPath & "\Plugins\OnlyConsole_Config\CommandPlugins"
+            Dim plugins = CommandManager.LoadPlugins(pluginPath)
+
+            For Each plugin In plugins
+                MsgBox("Loaded command plugin: " & plugin.Name)
+                plugin.GetForm1(MainClassPluginMode.Form1)
+                plugin.GetUI(MainClassPluginMode.UI)
+                plugin.Initialize(CommandController)
+                plugin.Execute()
+            Next
+        Else
+            MainClassPluginMode.UI.RunCommands(Command, Form)
         End If
     End Sub
 
@@ -128,6 +151,16 @@ Public Class Form1
                 End If
             End If
         Else
+            If UseCustomConsoleCommands = True Then
+                If UserMode = "Safe" Then
+                    RunCommand(RichTextBox1.Text, Me, SafeUser)
+                ElseIf UserMode = "UnSafe" Then
+                    RunCommand(RichTextBox1.Text, Me, UnSafeUser)
+                End If
+            Else
+                MainClassPluginMode.UI.RunCommands(RichTextBox1.Text, Me)
+            End If
+
 
         End If
     End Sub
@@ -147,10 +180,34 @@ Public Class Form1
 
             SafeUser = New TouchTest.UserManager(MainClassPluginMode.Form1.User.Username)
 
-            If My.Computer.FileSystem.DirectoryExists(My.Application.Info.DirectoryPath & "\Plugins\OnlyConsole_Config") Then
+            If My.Computer.FileSystem.DirectoryExists(My.Application.Info.DirectoryPath & "\Plugins\OnlyConsole_Config") And My.Computer.FileSystem.DirectoryExists(My.Application.Info.DirectoryPath & "\Plugins\OnlyConsole_Config\Users\" & MainClassPluginMode.Form1.User.Username) Then
                 IsInSetup = False
 
                 UnSafeUser = MainClassPluginMode.UserIGotViaLogonScreen
+
+                If My.Computer.FileSystem.FileExists(My.Application.Info.DirectoryPath & $"\Plugins\OnlyConsole_Config\Users\{MainClassPluginMode.Form1.User.Username}\UseUnSafeUser.setting") Then
+                    Try
+                        Dim unsafeuser_ As Boolean = Convert.ToBoolean(My.Computer.FileSystem.ReadAllText(My.Application.Info.DirectoryPath & "\Plugins\OnlyConsole_Config\UseUnSafeUser.setting"))
+
+                        If unsafeuser_ = True Then
+                            UserMode = "UnSafe"
+                        End If
+                    Catch ex As Exception
+                        If Environment.CommandLine.Contains("/DevMode") = True Then
+                            Debug.WriteLine(ex.Message)
+                        End If
+                    End Try
+                End If
+
+                If My.Computer.FileSystem.FileExists(My.Application.Info.DirectoryPath & $"\Plugins\OnlyConsole_Config\Users\{MainClassPluginMode.Form1.User.Username}\UseCustomConsoleCommands.setting") Then
+                    Try
+                        UseCustomConsoleCommands = Convert.ToBoolean(My.Computer.FileSystem.ReadAllText(My.Application.Info.DirectoryPath & $"\Plugins\OnlyConsole_Config\Users\{MainClassPluginMode.Form1.User.Username}\UseCustomConsoleCommands.setting"))
+                    Catch ex As Exception
+                        If Environment.CommandLine.Contains("/DevMode") = True Then
+                            Debug.WriteLine(ex.Message)
+                        End If
+                    End Try
+                End If
             Else
                 IsInSetup = True
             End If
@@ -170,7 +227,19 @@ Public Class Form1
         MainClassPluginMode.CustomConsole = New Form1
         MainClassPluginMode.CustomConsole.IsInAppMode = False
         MainClassPluginMode.Form1.OpenChildForm(MainClassPluginMode.CustomConsole)
-        MainClassPluginMode.Form1.EnableFullAppMode(True)
+        If My.Computer.FileSystem.DirectoryExists(My.Application.Info.DirectoryPath & "\Plugins\OnlyConsole_Config") Then
+            If My.Computer.FileSystem.FileExists(My.Application.Info.DirectoryPath & $"\Plugins\OnlyConsole_Config\Users\{MainClassPluginMode.Form1.User.Username}\UseCustomConsoleInFullScreenMode.setting") Then
+                Try
+                    MainClassPluginMode.Form1.EnableFullAppMode(Convert.ToBoolean(My.Computer.FileSystem.ReadAllText(My.Application.Info.DirectoryPath & $"\Plugins\OnlyConsole_Config\Users\{MainClassPluginMode.Form1.User.Username}\UseCustomConsoleInFullScreenMode.setting")))
+                Catch ex As Exception
+                    If Environment.CommandLine.Contains("/DevMode") = True Then
+                        Debug.WriteLine(ex.Message)
+                    End If
+                    MainClassPluginMode.Form1.EnableFullAppMode(False)
+                End Try
+            End If
+        End If
+
     End Sub
 
     Private Sub NextSetupStep(StepInt As Int64)
@@ -201,6 +270,9 @@ Public Class Form1
                 My.Computer.FileSystem.CreateDirectory(My.Application.Info.DirectoryPath & "\Plugins\OnlyConsole_Config")
             End If
 
+            ' This will be True due to code
+            Setup_UseSameConfigForAllUsers = False
+
             'Configs User Plugin Config
             If Setup_UseSameConfigForAllUsers = False Then
                 My.Computer.FileSystem.WriteAllText(My.Application.Info.DirectoryPath & "\Plugins\OnlyConsole_Config\UsersMultiUsersConfigs.setting", "True", False)
@@ -224,23 +296,23 @@ Public Class Form1
 
             'Setup_UseUnSafeUser
             If Setup_UseSameConfigForAllUsers = False Then
-                My.Computer.FileSystem.WriteAllText(My.Application.Info.DirectoryPath & "\Plugins\OnlyConsole_Config\Users\" & MainClassPluginMode.Form1.User.Username & "\UseUnSafeUser.setting", Setup_UseCustomConsoleCommands.ToString, False)
+                My.Computer.FileSystem.WriteAllText(My.Application.Info.DirectoryPath & "\Plugins\OnlyConsole_Config\Users\" & MainClassPluginMode.Form1.User.Username & "\UseUnSafeUser.setting", Setup_UseUnSafeUser.ToString, False)
             Else
-                My.Computer.FileSystem.WriteAllText(My.Application.Info.DirectoryPath & "\Plugins\OnlyConsole_Config\UseUnSafeUser.setting", Setup_UseCustomConsoleCommands.ToString, False)
+                My.Computer.FileSystem.WriteAllText(My.Application.Info.DirectoryPath & "\Plugins\OnlyConsole_Config\UseUnSafeUser.setting", Setup_UseUnSafeUser.ToString, False)
             End If
 
             'Setup_UseCustomConsoleInFullScreenMode
             If Setup_UseSameConfigForAllUsers = False Then
-                My.Computer.FileSystem.WriteAllText(My.Application.Info.DirectoryPath & "\Plugins\OnlyConsole_Config\Users\" & MainClassPluginMode.Form1.User.Username & "\UseCustomConsoleInFullScreenMode.setting", Setup_UseCustomConsoleCommands.ToString, False)
+                My.Computer.FileSystem.WriteAllText(My.Application.Info.DirectoryPath & "\Plugins\OnlyConsole_Config\Users\" & MainClassPluginMode.Form1.User.Username & "\UseCustomConsoleInFullScreenMode.setting", Setup_UseCustomConsoleInFullScreenMode.ToString, False)
             Else
-                My.Computer.FileSystem.WriteAllText(My.Application.Info.DirectoryPath & "\Plugins\OnlyConsole_Config\UseCustomConsoleInFullScreenMode.setting", Setup_UseCustomConsoleCommands.ToString, False)
+                My.Computer.FileSystem.WriteAllText(My.Application.Info.DirectoryPath & "\Plugins\OnlyConsole_Config\UseCustomConsoleInFullScreenMode.setting", Setup_UseCustomConsoleInFullScreenMode.ToString, False)
             End If
 
             'Setup_AutoRunCustomConsole
             If Setup_UseSameConfigForAllUsers = False Then
-                My.Computer.FileSystem.WriteAllText(My.Application.Info.DirectoryPath & "\Plugins\OnlyConsole_Config\Users\" & MainClassPluginMode.Form1.User.Username & "\AutoRunCustomConsole.setting", Setup_UseCustomConsoleCommands.ToString, False)
+                My.Computer.FileSystem.WriteAllText(My.Application.Info.DirectoryPath & "\Plugins\OnlyConsole_Config\Users\" & MainClassPluginMode.Form1.User.Username & "\AutoRunCustomConsole.setting", Setup_AutoRunCustomConsole.ToString, False)
             Else
-                My.Computer.FileSystem.WriteAllText(My.Application.Info.DirectoryPath & "\Plugins\OnlyConsole_Config\AutoRunCustomConsole.setting", Setup_UseCustomConsoleCommands.ToString, False)
+                My.Computer.FileSystem.WriteAllText(My.Application.Info.DirectoryPath & "\Plugins\OnlyConsole_Config\AutoRunCustomConsole.setting", Setup_AutoRunCustomConsole.ToString, False)
             End If
 
             SetReadOnly(False)
